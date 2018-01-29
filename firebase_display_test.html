@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+
+  <meta charset="UTF-8">
+  <title>Cameras!</title>
+
+    <!--  JQUERY  -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+    <!-- Moment.js Reference -->
+    <script src="https://cdn.jsdelivr.net/momentjs/2.12.0/moment.min.js"></script>
+</head>
+
+<body>
+  <!-- 
+  CHICAGO coordinates
+  Latitude‎: ‎41.881832
+  Longitude‎: ‎-87.623177 
+
+  database notes:
+      locations:
+        number:       incrementing number (might not need)
+        cameraType:   1=redLight 2=speed (number)
+        intersection: intersecting streets (string)
+        approach1:    approach1 is 1st camera direction (string)
+        approach2:    approach2 is 2nd camera direction (string)
+        approach3:    approach3 is 3rd camera direction (string)
+        goLiveDate:   goLiveDate date camera went live (date)
+        latitude:     location (float)
+        longitude:    location (float)
+      lastUpdate
+        Date:         date put in database (date) 
+  -->
+
+  <!-- ================================================================================== -->
+
+  <script src="https://www.gstatic.com/firebasejs/4.9.0/firebase.js"></script>
+  <script type="text/javascript">
+
+  // Initialize Firebase
+/*  var config = {
+    apiKey: "AIzaSyDYK8ax3uqWP-K6DkOg9S-r8_NYYrzJoG8",
+    authDomain: "cameras-1420a.firebaseapp.com",
+    databaseURL: "https://cameras-1420a.firebaseio.com",
+    projectId: "cameras-1420a",
+    storageBucket: "cameras-1420a.appspot.com",
+    messagingSenderId: "643375403696"
+  };
+
+ firebase.initializeApp(config);
+*/
+
+  // Initialize Firebase (test)
+  var config = {
+    apiKey: "AIzaSyCPmEEYC9K4SGq2UYJbdL95HXIIissmMt4",
+    authDomain: "test-9cc20.firebaseapp.com",
+    databaseURL: "https://test-9cc20.firebaseio.com",
+    projectId: "test-9cc20",
+    storageBucket: "",
+    messagingSenderId: "100835032455"
+  };
+  firebase.initializeApp(config);
+
+  // ================================================================================
+
+  // Get a reference to the database service
+  var database = firebase.database();
+
+  const locations = database.ref().child("locations");
+  const dateRef = database.ref().child("lastUpdate")
+
+  var redLightCount=0;
+  var speedCount = 0;
+  var updateTime;
+  var timeBetweenUpdates = 0.5; // days
+
+  // query speed cameras 
+  var queryURL_speed = "https://data.cityofchicago.org/api/views/4i42-qv3h/rows.json?accessType=DOWNLOAD"
+  
+  // query red light cameras
+  var queryURL_redLight = "https://data.cityofchicago.org/api/views/thvf-6diy/rows.json?accessType=DOWNLOAD"
+
+  // current time for database update
+  var now = moment();
+  var currentTime = moment(now).format("MM/DD/YY HH:mm");
+
+/* for testing update 
+    var tmp = moment(currentTime).subtract(1,"days");
+    tmp = moment(tmp).format("MM/DD/YY HH:mm")
+    console.log("tmp "+tmp)
+    // add date timestamp of database update
+    var tmpRef = dateRef.set ({ 
+         //Date: currentTime 
+         Date: tmp  // testing
+     }); // end push date
+*/
+/////////////////////////////////////////////////////////////////
+  function updateCamerasDatabase() {
+    
+    // empty database
+    database.ref().set("");
+
+    //var tmp = currentTime.subtract(1,"days")
+    // add date timestamp of database update
+    var tmpRef = dateRef.set ({ 
+         Date: currentTime 
+        // Date: tmp  // testing
+     }); // end push date
+
+    var totalRed = redLightCameraData();
+    var totalSpeed = speedCameraData();
+
+    //does not keep values?????
+    //console.log("updateCamerasDatabase redLightCount "+totalRed+" "+redLightCount);
+  }
+/////////////////////////////////////////////////////////////////
+
+  dateRef.once('value')
+  .then(function(snapshot) {
+
+    var datedb = snapshot.val(); 
+    var tmpDate = JSON.stringify(datedb).split("\"");
+    var updateTmp = tmpDate[3];
+    console.log("tmpDate "+tmpDate+" "+tmpDate[3])
+    //console.log("dateRef value last "+tmpDate[5]+" now "+now);
+    updateTime = moment(updateTmp);
+    var timeDiff = now.diff(updateTime,'days',true); // diff true returns fraction of days
+    console.log("timeDiff "+timeDiff);
+    if ( timeDiff > timeBetweenUpdates )
+    {
+      console.log("updating...timeDiff "+timeDiff);
+      updateCamerasDatabase();
+    }
+
+  });
+
+  ////////////////////////////////////////////////
+  //
+  // Insert Red Light Camera Data
+  //
+  ///////////////////////////////////////////////
+  function redLightCameraData() {
+
+    // locations transaction
+    locations.transaction( function() {
+
+    // Performing an AJAX request with the queryURL
+    $.ajax({
+        url: queryURL_redLight,
+        method: "GET"
+    })
+    // After data comes back from the request
+    .then(function(response) {
+
+     // storing the data from the AJAX request in the results variable
+     var results = response.data;
+
+     //console.log("results length "+results.length+"results "+results[0]);
+     
+     var number = 1;
+     var intersection = "";
+     var approach1 = "";
+     var approach2 = "";
+     var approach3 = "";
+     var goLiveDate = "";
+     var latitude = "";
+     var longitude = "";
+     var redLight = 1;
+     var speed = 2;
+
+     var cameraObj = {
+      cameraType: redLight,
+      number: 1,
+      intersection: intersection,
+      approach1: approach1,
+      approach2: approach2,
+      approach3: approach3,
+      goLiveDate: goLiveDate,
+      latitude: latitude,
+      longitude: longitude
+     }
+
+     // Looping through each result item
+     for (var i=0; i < results.length;i++)
+      {
+
+        var obj = JSON.stringify(results[i]).split(",");
+        //document.getElementById("demo").innerHTML = obj;
+                
+        //debug 
+        /*       
+        if ( i == 0 )
+         {
+          for (var j = 0; j < obj.length; j++) 
+           {
+            //display one set of data
+             console.log("obj["+j+"]"+obj[j]);
+           }
+         } // end if i
+         */
+
+        // for red light data
+        cameraObj.number = i+1;
+        var str = obj[8];
+        var res = str.replace(/['"']+/g, '');
+        cameraObj.intersection = res;
+        str = obj[9];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.approach1 = res;
+        str = obj[10];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.approach2 = res;
+        str = obj[11];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.approach3 = res;
+        str = obj[12];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.goLiveDate = res;
+        str = obj[13];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.latitude = parseFloat(res);
+        str = obj[14];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.longitude = parseFloat(res);
+        cameraObj.cameraType = redLight;
+
+        // Code for handling the push
+        var newRef = locations.push(  { 
+          cameraObj
+        }); // end push cameraObj
+      
+        redLightCount = i+1;
+
+      } //end for i
+     }); // end ajax redLight
+   }); //end transaction
+   console.log("end redLight")
+  } // end redLightData
+
+  ////////////////////////////////////////////////
+  //
+  // Insert Speed Camera Data
+  //
+  /////////////////////////////////////////////// 
+  function speedCameraData() {
+
+    // locations transaction
+    locations.transaction(function() {
+
+    // Performing an AJAX request with the queryURL
+    $.ajax({
+        url: queryURL_speed,
+        method: "GET"
+    })
+    // After data comes back from the request
+    .then(function(response2) {
+
+      // storing the data from the AJAX request in the results variable
+      var results = response2.data;
+/*
+console.log("queryURL "+queryURL_speed); 
+console.log("results length "+results.length+" results "+results[0]);
+*/
+      var number = 1;
+      var intersection = "";
+      var approach1 = "";
+      var approach2 = "";
+      var approach3 = "";
+      var goLiveDate = "";
+      var latitude = "";
+      var longitude = "";
+      var redLight = 1;
+      var speed = 2;
+
+      var cameraObj = {
+       cameraType: speed,
+       number: 1,
+       intersection: intersection,
+       approach1: approach1,
+       approach2: approach2,
+       approach3: approach3,
+       goLiveDate: goLiveDate,
+       latitude: latitude,
+       longitude: longitude
+      }
+
+      // Looping through each result
+      for (var i=0; i < results.length;i++)
+      {
+
+        var obj = JSON.stringify(results[i]).split(",");
+        
+        /* debug  
+        document.getElementById("demo").innerHTML = obj;      
+        if ( i == 0)
+         {
+          for (var j = 0; j < obj.length; j++) 
+           {
+            //display one set of data
+             console.log("obj["+j+"]"+obj[j]);
+           }
+         } // end if i
+        */
+
+        // for speed camera
+        var str = obj[8];
+        var res = str.replace(/['"']+/g, '');
+        cameraObj.intersection = res;
+        str = obj[9];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.approach1 = res;
+        str = obj[10];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.approach2 = res;
+        cameraObj.approach3 = "";
+        str = obj[11];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.goLiveDate = res;
+        str = obj[12];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.latitude = parseFloat(res);
+        str = obj[13];
+        res = str.replace(/['"']+/g, '');
+        cameraObj.longitude = parseFloat(res);
+        cameraObj.cameraType = speed;
+        cameraObj.number = i+redLightCount+1; //continue count from total redlight cameras
+
+        // Code for handling the push
+        var newRef = locations.push({
+          cameraObj
+        }); //end push cameraObj
+        
+        speedCount = i+1;
+       // if (i==150)
+       //   console.log("150 redLightCount "+redLightCount+" speedCount "+speedCount)
+      } //end for i
+
+     }); // end ajax speed
+   });// end transactions
+console.log("end speedCount")
+  } // end speed
+
+ </script>
+
+</body>
+
+</html>
