@@ -14,31 +14,44 @@
 </head>
 
 <body>
-  <!-- 
-  CHICAGO coordinates
-  Latitude‎: ‎41.881832
-  Longitude‎: ‎-87.623177 
-
-  database notes:
-      locations:
-        number:       incrementing number (might not need)
-        cameraType:   1=redLight 2=speed (number)
-        intersection: intersecting streets (string)
-        approach1:    approach1 is 1st camera direction (string)
-        approach2:    approach2 is 2nd camera direction (string)
-        approach3:    approach3 is 3rd camera direction (string)
-        goLiveDate:   goLiveDate date camera went live (date)
-        latitude:     location (float)
-        longitude:    location (float)
-      lastUpdate
-        Date:         date put in database (date) 
-  -->
 
   <!-- ================================================================================== -->
 
   <script src="https://www.gstatic.com/firebasejs/4.9.0/firebase.js"></script>
   <script type="text/javascript">
+  /*
+  CHICAGO coordinates
+  Latitude‎: ‎41.881832
+  Longitude‎: ‎-87.623177 
 
+  database notes:
+
+      locations
+        approach1:    approach1 is 1st camera direction (string)
+        approach2:    approach2 is 2nd camera direction (string)
+        approach3:    approach3 is 3rd camera direction (string)
+        cameraType:   1=redLight 2=speed (number)
+        goLiveDate:   goLiveDate date camera went live (date MM/DD/YYYY)
+        intersection: intersecting streets (string)
+        latitude:     location (float)
+        longitude:    location (float)
+        number:       incrementing number
+
+      lastUpdate    
+        Date:         date put in database (date) 
+
+      Sample data for speed camera
+      locations
+       approach1: "SB"
+       approach2: "null"
+       approach3: ""
+       cameraType: 2
+       goLiveDate: "01/04/2014"
+       intersection: "4436 N Western (Speed Camera)"
+       latitude: 41.9624218495406
+       longitude: -87.68886227502836
+       number: 189
+*/
   // Initialize Firebase
 /*  var config = {
     apiKey: "AIzaSyDYK8ax3uqWP-K6DkOg9S-r8_NYYrzJoG8",
@@ -68,13 +81,16 @@
   // Get a reference to the database service
   var database = firebase.database();
 
+  // ref to locations and lastUpdate
   const locations = database.ref().child("locations");
   const dateRef = database.ref().child("lastUpdate")
 
+  // initial variables
   var redLightCount=0;
   var speedCount = 0;
   var updateTime;
   var timeBetweenUpdates = 0.5; // days
+  var debug = 0;
 
   // query speed cameras 
   var queryURL_speed = "https://data.cityofchicago.org/api/views/4i42-qv3h/rows.json?accessType=DOWNLOAD"
@@ -86,17 +102,26 @@
   var now = moment();
   var currentTime = moment(now).format("MM/DD/YY HH:mm");
 
-/* for testing update 
+  if ( debug )
+  {
     var tmp = moment(currentTime).subtract(1,"days");
     tmp = moment(tmp).format("MM/DD/YY HH:mm")
-    console.log("tmp "+tmp)
+    //console.log("tmp "+tmp)
+    
     // add date timestamp of database update
     var tmpRef = dateRef.set ({ 
          //Date: currentTime 
          Date: tmp  // testing
      }); // end push date
-*/
-/////////////////////////////////////////////////////////////////
+  }
+  ////////////////////////////////////////////////
+  //
+  // updateCamerasDatabase()
+  //
+  // update if database has not been updated
+  // send timeBetweenUpdates variable
+  // 
+  ///////////////////////////////////////////////
   function updateCamerasDatabase() {
     
     // empty database
@@ -115,7 +140,17 @@
     //does not keep values?????
     //console.log("updateCamerasDatabase redLightCount "+totalRed+" "+redLightCount);
   }
-/////////////////////////////////////////////////////////////////
+  ////////////////////////////////////////////////
+  //
+  //   Runs once to check the date
+  //   in database and compare to
+  //   current time
+  //   If time to update call
+  //   updateCamerasDatabase()
+  //   Note: dateRef is the child("lastUpdate")
+  //   tmpDate JSON format {,Date,:,01/27/18 18:50,}
+  // 
+  ///////////////////////////////////////////////
 
   dateRef.once('value')
   .then(function(snapshot) {
@@ -123,14 +158,14 @@
     var datedb = snapshot.val(); 
     var tmpDate = JSON.stringify(datedb).split("\"");
     var updateTmp = tmpDate[3];
-    console.log("tmpDate "+tmpDate+" "+tmpDate[3])
-    //console.log("dateRef value last "+tmpDate[5]+" now "+now);
+
     updateTime = moment(updateTmp);
     var timeDiff = now.diff(updateTime,'days',true); // diff true returns fraction of days
-    console.log("timeDiff "+timeDiff);
+    //console.log("timeDiff "+timeDiff);
+
     if ( timeDiff > timeBetweenUpdates )
     {
-      console.log("updating...timeDiff "+timeDiff);
+      //console.log("updating...timeDiff "+timeDiff+' days'+moment(timeDiff).format('h')+" hours");
       updateCamerasDatabase();
     }
 
@@ -138,7 +173,34 @@
 
   ////////////////////////////////////////////////
   //
-  // Insert Red Light Camera Data
+  // redLightCameraData()
+  //
+  // Insert Red Light Camera Data in database
+  //
+  // Sample JSON DATA
+  // Red Light obj[0][5944
+  // Red Light obj[1]"0B7DA671-A671-40C7-8F73-C9B0F5A392A1"
+  // Red Light obj[2]5944
+  // Red Light obj[3]1414553253
+  // Red Light obj[4]"878752"
+  // Red Light obj[5]1414553253
+  // Red Light obj[6]"878752"
+  // Red Light obj[7]null
+  // Red Light obj[8]"Pulaski-Diversey"
+  // Red Light obj[9]"SB"
+  // Red Light obj[10]"NB"
+  // Red Light obj[11]null
+  // Red Light obj[12]"2009-05-15T00:00:00"
+  // Red Light obj[13]"41.931791"
+  // Red Light obj[14]"-87.726979"
+  // Red Light obj[15]["{\"address\":\"\"
+  // Red Light obj[16]\"city\":\"\"
+  // Red Light obj[17]\"state\":\"\"
+  // Red Light obj[18]\"zip\":\"\"}"
+  // Red Light obj[19]"41.931791"
+  // Red Light obj[20]"-87.726979"
+  // Red Light obj[21]null
+  // Red Light obj[22]false]]
   //
   ///////////////////////////////////////////////
   function redLightCameraData() {
@@ -190,16 +252,17 @@
         //document.getElementById("demo").innerHTML = obj;
                 
         //debug 
-        /*       
+        if ( debug )
+        {    
         if ( i == 0 )
-         {
-          for (var j = 0; j < obj.length; j++) 
-           {
-            //display one set of data
-             console.log("obj["+j+"]"+obj[j]);
-           }
-         } // end if i
-         */
+          {
+           for (var j = 0; j < obj.length; j++) 
+            {
+             //display one set of data
+              console.log("Red Light obj["+j+"]"+obj[j]);
+            }
+          } // end if i
+        }
 
         // for red light data
         cameraObj.number = i+1;
@@ -236,12 +299,38 @@
       } //end for i
      }); // end ajax redLight
    }); //end transaction
-   console.log("end redLight")
+
   } // end redLightData
 
   ////////////////////////////////////////////////
   //
+  // speedCameraData()
+  //
   // Insert Speed Camera Data
+  //
+  // Sample JSON DATA
+  // speed obj[0][4658
+  // speed obj[1]"5CC304FE-0F80-448D-AFAC-24F3789F20B0"
+  // speed obj[2]4658
+  // speed obj[3]1427253157
+  // speed obj[4]"878752"
+  // speed obj[5]1427253157
+  // speed obj[6]"878752"
+  // speed obj[7]null
+  // speed obj[8]"3843 W 111th (Speed Camera)"
+  // speed obj[9]"EB"
+  // speed obj[10]"WB"
+  // speed obj[11]"01/13/2014"
+  // speed obj[12]"41.69120239624487"
+  // speed obj[13]"-87.71721139909997"
+  // speed obj[14]["{\"address\":\"\"
+  // speed obj[15]\"city\":\"\"
+  // speed obj[16]\"state\":\"\"
+  // speed obj[17]\"zip\":\"\"}"
+  // speed obj[18]"41.69120239624487"
+  // speed obj[19]"-87.71721139909997"
+  // speed obj[20]null
+  // speed obj[21]false]]
   //
   /////////////////////////////////////////////// 
   function speedCameraData() {
@@ -292,17 +381,17 @@ console.log("results length "+results.length+" results "+results[0]);
 
         var obj = JSON.stringify(results[i]).split(",");
         
-        /* debug  
-        document.getElementById("demo").innerHTML = obj;      
-        if ( i == 0)
-         {
-          for (var j = 0; j < obj.length; j++) 
+        if ( debug ) 
+        {       
+          if ( i == 0)
            {
-            //display one set of data
-             console.log("obj["+j+"]"+obj[j]);
-           }
-         } // end if i
-        */
+            for (var j = 0; j < obj.length; j++) 
+             {
+               //display one set of data
+               console.log("speed obj["+j+"]"+obj[j]);
+             }
+           } // end if i
+        }
 
         // for speed camera
         var str = obj[8];
@@ -333,13 +422,12 @@ console.log("results length "+results.length+" results "+results[0]);
         }); //end push cameraObj
         
         speedCount = i+1;
-       // if (i==150)
-       //   console.log("150 redLightCount "+redLightCount+" speedCount "+speedCount)
+
       } //end for i
 
      }); // end ajax speed
    });// end transactions
-console.log("end speedCount")
+
   } // end speed
 
  </script>
